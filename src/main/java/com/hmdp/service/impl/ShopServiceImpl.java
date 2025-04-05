@@ -10,6 +10,7 @@ import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.hmdp.utils.CacheClient;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.json.GsonJsonParser;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -19,8 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.annotation.Resource;
 import java.util.concurrent.TimeUnit;
 
-import static com.hmdp.utils.RedisConstants.CACHE_SHOP_KEY;
-import static com.hmdp.utils.RedisConstants.CACHE_SHOP_TTL;
+import static com.hmdp.utils.RedisConstants.*;
 
 /**
  * <p>
@@ -30,6 +30,7 @@ import static com.hmdp.utils.RedisConstants.CACHE_SHOP_TTL;
  * @author 虎哥
  * @since 2021-12-22
  */
+@Slf4j
 @Service
 public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IShopService {
 
@@ -47,11 +48,22 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             Shop shop = JSONUtil.toBean(shopCache, Shop.class);
             return Result.ok(shop);
         }
+
+//        解决缓存穿透第二步：判断redis缓存中是否命中了空值
+        if (shopCache != null) {
+            //此时，我们已经知道 shopCache 要么是 null，要么是空字符串或只包含空白字符
+            //如果 shopCache != null，那么它一定是空字符串或只包含空白字符，表示之前已经查询过数据库并确认该商铺不存在
+//            log.info("此时已经写入redis");
+            return Result.fail("店铺信息不存在");
+        }
+
 //        4.不存在则根据id查询数据库
         Shop shop = getById(id);
-//        5.数据库中商铺不存在返回404
+//        5.数据库中商铺不存在返回404  ->解决缓存穿透第一步：将空值写入redis并设置较短的有效期
         if(shop == null){
-            return Result.fail("404！商铺不存在！");
+            stringRedisTemplate.opsForValue().set(key, "",CACHE_NULL_TTL,TimeUnit.MINUTES);
+//            log.info("此时还未写入redis");
+            return Result.fail("商铺不存在！");
         }
 //        6.如果商铺存在将商铺数据写入Redis   (超时剔除策略)
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop),CACHE_SHOP_TTL,TimeUnit.MINUTES);
