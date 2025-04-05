@@ -44,7 +44,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 //        2.判断是否存在
         if (StrUtil.isNotBlank(shopCache)){
             //        3.存在，直接返回商铺信息
-            Shop shop = BeanUtil.toBean(shopCache, Shop.class);
+            Shop shop = JSONUtil.toBean(shopCache, Shop.class);
             return Result.ok(shop);
         }
 //        4.不存在则根据id查询数据库
