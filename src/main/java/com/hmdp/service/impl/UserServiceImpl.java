@@ -98,7 +98,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         stringRedisTemplate.opsForHash().putAll(tokenKey,userMap);
 //        7.4设置token有效期
         stringRedisTemplate.expire(tokenKey,LOGIN_USER_TTL,TimeUnit.MINUTES);
-//        8.返回token
+//        8.返回token   客户端（浏览器/App）存储了这个 token（在 localStorage中，老师给的nginx代码中有这个）
         return Result.ok(token);
     }
 

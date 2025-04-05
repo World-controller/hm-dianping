@@ -16,7 +16,7 @@ import static com.hmdp.utils.RedisConstants.LOGIN_USER_TTL;
 
 public class RefreshTokenInterceptor implements HandlerInterceptor {
 
-    private StringRedisTemplate stringRedisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
 
     public RefreshTokenInterceptor(StringRedisTemplate stringRedisTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
@@ -26,14 +26,14 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         // 1.获取请求头中的token
         String token = request.getHeader("authorization");
-        if (StrUtil.isBlank(token)) {
+        if (StrUtil.isBlank(token)) {//token为空放行,因为这个过滤器的任务只是为了刷新时间语句执行
             return true;
         }
         // 2.基于TOKEN获取redis中的用户
         String key  = LOGIN_USER_KEY + token;
         Map<Object, Object> userMap = stringRedisTemplate.opsForHash().entries(key);
         // 3.判断用户是否存在
-        if (userMap.isEmpty()) {
+        if (userMap.isEmpty()) {//用户为空放行，因为这个过滤器的任务只是为了刷新时间语句执行
             return true;
         }
         // 5.将查询到的hash数据转为UserDTO
