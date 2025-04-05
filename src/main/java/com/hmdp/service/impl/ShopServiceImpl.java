@@ -53,9 +53,26 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         if(shop == null){
             return Result.fail("404！商铺不存在！");
         }
-//        6.如果商铺存在将商铺数据写入Redis
-        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop));
+//        6.如果商铺存在将商铺数据写入Redis   (超时剔除策略)
+        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop),CACHE_SHOP_TTL,TimeUnit.MINUTES);
 //        7.返回商铺信息
         return Result.ok(shop);
+    }
+
+    @Override
+    @Transactional(rollbackFor = {Exception.class})
+    public Result updateShop(Shop shop) {
+        Long id = shop.getId();
+        if (id == null){
+            return Result.fail("店铺id不能为空！");
+        }
+        /*
+          主动更新策略实现
+         */
+//        1.先    操作数据库
+        updateById(shop);
+//        2.再    进行缓存删除的操作
+        stringRedisTemplate.delete(CACHE_SHOP_KEY + id);
+        return Result.ok();
     }
 }
