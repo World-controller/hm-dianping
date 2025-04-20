@@ -75,7 +75,8 @@ public class Voucher implements Serializable {
     /**
      * 库存
      */
-    @TableField(exist = false)
+    @TableField(exist = false)//这个字段只用于业务逻辑处理，在Java对象中需要这个字段，但数据库表中不需要存储，通常用于临时存储计算结果或中间值
+    //这是一种常见的对象关系映射(ORM)技巧，用于处理那些需要在代码中使用但不需要持久化到数据库的字段
     private Integer stock;
 
     /**

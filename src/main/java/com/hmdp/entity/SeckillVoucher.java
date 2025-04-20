@@ -20,16 +20,18 @@ import java.time.LocalDateTime;
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
-@Accessors(chain = true)
-@TableName("tb_seckill_voucher")
+@Accessors(chain = true)// 开启链式调用，例如：对象.setA().setB()
+@TableName("tb_seckill_voucher")// MyBatis-Plus注解，指定对应的数据库表名
 public class SeckillVoucher implements Serializable {
 
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;// 序列化版本号，用于版本控制
 
     /**
      * 关联的优惠券的id
      */
-    @TableId(value = "voucher_id", type = IdType.INPUT)
+    @TableId(value = "voucher_id", type = IdType.INPUT)//MyBatis-Plus的注解，标识这是数据库表的主键字段
+    // value = "voucher_id": 指定数据库表中对应的列名是"voucher_id"
+//    type = IdType.INPUT: 指定主键的生成策略是手动输入
     private Long voucherId;
 
     /**
