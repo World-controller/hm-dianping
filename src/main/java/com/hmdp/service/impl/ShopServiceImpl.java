@@ -8,6 +8,7 @@ import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
+import com.hmdp.utils.CacheClient;
 import com.hmdp.utils.RedisData;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -35,18 +36,27 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
-    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
+    @Resource
+    private CacheClient cacheClient;
 
+    //todo  比如在HmDianPingApplicationTests中对“103餐厅”进行数据预热（已经实现），但是后面四个餐厅作为非热点key则进行普通的缓存穿透代码实现（未实现）
+    //此queryById方法仅仅针对热点Key进行逻辑过期操作
     @Override
     public Result queryById(Long id) {
         //缓存穿透代码实现
 //        Shop shop = queryWithPassThrough(id);
+//        Shop shop = cacheClient.queryWithPassThrough(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
 
 //        互斥锁解决缓存击穿
 //        Shop shop = queryWithMutex(id);
 
 //        逻辑过期解决缓存击穿
-        Shop shop = queryWithLogicalExpire(id);
+//        Shop shop = queryWithLogicalExpire(id);
+        Shop shop = cacheClient.handCacheBreakdownByLogicalExpire(CACHE_SHOP_KEY, id, Shop.class, LOCK_SHOP_KEY,this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        if (shop == null) {
+            return Result.fail("店铺不存在！");
+        }
+
         return Result.ok(shop);
     }
 
@@ -54,6 +64,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     * 缓存穿透代码实现
     * */
 
+    /*
     public  Shop queryWithPassThrough(Long id){
         //        1.从Redis查询商铺缓存
         String key = CACHE_SHOP_KEY + id;
@@ -86,20 +97,25 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 //        7.返回商铺信息
         return shop;
     }
+    **/
+
 
     /*
     * 互斥锁解决缓存击穿
     * */
-
+    /*
     private boolean tryLock(String key){
         Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", LOCK_SHOP_TTL, TimeUnit.SECONDS);
         return BooleanUtil.isTrue(flag);//防止Boolean->boolean过程中出现空指针异常
     }
-
+     */
+    /*
     private void unlock(String key){
         stringRedisTemplate.delete(key);
     }
 
+     */
+    /*
     public  Shop queryWithMutex(Long id) {
         //        1.从Redis查询商铺缓存
         String key = CACHE_SHOP_KEY + id;
@@ -151,6 +167,8 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         return shop;
     }
 
+     */
+
     /*
     * 逻辑过期解决缓存击穿第一步：缓存重建的数据预热
     * */
@@ -167,9 +185,11 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         stringRedisTemplate.opsForValue().set(CACHE_SHOP_KEY + id,JSONUtil.toJsonStr(redisData));
     }
 
+
     /*
     * 逻辑过期解决缓存击穿第二步：正式进行缓存重建
     * */
+    /*
     public  Shop queryWithLogicalExpire(Long id){
         //        1.从Redis查询商铺缓存
         String key = CACHE_SHOP_KEY + id;
@@ -216,7 +236,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 //        7.返回商铺信息
         return shop;
     }
-
+    **/
 
 
     @Override
