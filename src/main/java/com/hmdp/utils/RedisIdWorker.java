@@ -8,6 +8,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
 @Component
+@SuppressWarnings({"all"})
 public class RedisIdWorker {
     /**
      * 开始时间戳

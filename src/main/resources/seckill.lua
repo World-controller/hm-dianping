@@ -3,6 +3,10 @@
 local voucherId = ARGV[1]
 -- 1.2用户ID
 local userId = ARGV[2]
+-- 1.3订单ID
+local orderId = ARGV[3]
+-- 1.4Stream消息队列名称
+local queueName = ARGV[4]
 --2.数据key
 -- 2.1库存key
 local stockKey = 'seckill:stock:' .. voucherId
@@ -27,4 +31,6 @@ end
 redis.call('incrby',stockKey,-1)
 -- 3.5下单（保存用户）
 redis.call('sadd',orderKey,userId)
+-- 3.6发送消息到队列中 XADD stream.orders * k1 v1 k2 v2(为什么是id？  因为与voucherOrder中的属性名保持一致，方便创建订单)
+redis.call('xadd',queueName,'*','userId',userId,'voucherId',voucherId,'id',orderId)
 return 0

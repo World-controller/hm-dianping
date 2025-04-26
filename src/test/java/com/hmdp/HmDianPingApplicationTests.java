@@ -27,7 +27,7 @@ class HmDianPingApplicationTests {
 
         @Resource
         private RedisIdWorker redisIdWorker;
-        private ExecutorService es = Executors.newFixedThreadPool(500);
+        private final ExecutorService es = Executors.newFixedThreadPool(500);
         @Test
         public void testIdWorker() throws InterruptedException {
             // 创建计数器闭锁，等待300个任务完成
