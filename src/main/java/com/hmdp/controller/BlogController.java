@@ -42,6 +42,7 @@ public class BlogController {
         return Result.ok(blog.getId());
     }
 
+    //修改点赞数量
     @PutMapping("/like/{id}")
     public Result likeBlog(@PathVariable("id") Long id) {
         // 修改点赞数量
@@ -62,15 +63,19 @@ public class BlogController {
         return Result.ok(records);
     }
 
+    //对首页的热门博客进行分页查询并展示
     @GetMapping("/hot")
     public Result queryHotBlog(@RequestParam(value = "current", defaultValue = "1") Integer current) {
         return blogService.queryHotBlog(current);
     }
 
+    //根据blog id 既查询blog的信息，同时获取blog对应用户的信息
     @GetMapping("/{id}")
     public Result queryBlogById(@PathVariable("id") Long id){
         return blogService.queryBlogById(id);
     }
+
+    //实现查询top5的点赞用户
     @GetMapping("/likes/{id}")
     public Result queryBlogLikes(@PathVariable("id") Long id){
         return blogService.queryBlogLikes(id);
