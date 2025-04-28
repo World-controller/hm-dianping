@@ -98,13 +98,22 @@ class HmDianPingApplicationTests {
                     ));
                 }
                 stringRedisTemplate.opsForGeo().add(key, locations);//一次直接完成,减少和redis的交互次数,提高效率
-
-
-
             }
-
-
-
         }
+
+    @Test
+    void testHyperLogLog() {
+        String[] values = new String[1000];
+        for (int i = 0; i < 1000000; i++) {
+            values[i % 1000] = "user_" + i;
+            // 每1000次，添加一次，添加到Redis
+            if (i % 1000 == 999) {
+                stringRedisTemplate.opsForHyperLogLog().add("hl2", values);
+            }
+        }
+        // 统计数量
+        Long count = stringRedisTemplate.opsForHyperLogLog().size("hl2");
+        System.out.println("count = " + count); // count = 997593
+    }
 
 }
