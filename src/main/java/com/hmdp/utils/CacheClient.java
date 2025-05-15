@@ -1,13 +1,17 @@
 package com.hmdp.utils;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RBloomFilter;
+import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,6 +32,10 @@ import static com.hmdp.utils.RedisConstants.*;
 public class CacheClient {
 
     private final StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private RedissonClient redissonClient;
+
     public CacheClient(StringRedisTemplate stringRedisTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
     }
@@ -45,7 +53,7 @@ public class CacheClient {
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(value),time,unit);
     }
 
-    //    方法2：将任意Java对象序列化为json并存储在string类型的key中，并且可以设置逻辑过期时间，用于处理缓存击穿问题
+    //    方法2：将任意Java对象序列化为json并存储在string类型的key中，并且可以设置逻辑过期时间，用于处理缓存击穿问题（穿透是双不存在，击穿是库有缓无）
     /**
      * 将数据加入Redis，并设置逻辑过期时间（实际有效期为永久）
      *
@@ -62,7 +70,8 @@ public class CacheClient {
         //写入Redis - 使用redisData对象而不是原始值
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(redisData));
     }
-    //    方法3：根据指定的key查询缓存，并反序列化为指定类型，利用缓存空值的方式解决缓存穿透问题
+
+    //    方法3：根据指定的key查询缓存，并反序列化为指定类型，利用缓存空值的方式解决缓存穿透问题（穿透是双不存在，击穿是库有缓无）
     /**
      * 根据id查询数据（使用缓存空值法解决缓存穿透）
      *
@@ -76,7 +85,6 @@ public class CacheClient {
      * @param <ID>
      * @return
      */
-
     public <T,ID> T handCachePenetrationByBlankValue(String keyPrefix, ID id, Class<T> type, Function<ID,T> dbFallback, Long time, TimeUnit unit){
         //        1.从Redis查询商铺缓存
         String key = keyPrefix + id;
@@ -87,16 +95,14 @@ public class CacheClient {
             T t = JSONUtil.toBean(json, type);
             return t;
         }
-
 //        解决缓存穿透第二步：判断redis缓存中是否命中了空值
         if (json != null) {
-            //此时，我们已经知道 json 要么是 null，要么是空字符串或只包含空白字符
+            //此时，我们已经知道 json 要么是 null，要么是空字符串（""）或只包含空白字符("\t\n")
             //如果 json != null，那么它一定是空字符串或只包含空白字符，表示之前已经查询过数据库并确认该商铺不存在
 //            log.info("此时已经写入redis");
             return null;
         }
-
-//        4.不存在则根据id查询数据库
+//        4.不存在（仅有json==null的情况）则根据id查询数据库
         T t = dbFallback.apply(id);
 //        5.数据库中商铺不存在返回404  ->解决缓存穿透第一步：将空值写入redis并设置较短的有效期
         if(t == null){
@@ -110,7 +116,64 @@ public class CacheClient {
         return t;
     }
 
-    //    方法4：根据指定的key查询缓存，并反序列化为指定类型，需要利用逻辑过期解决缓存击穿问题
+    /**
+     * 根据id查询数据（使用布隆过滤器+空值法解决缓存穿透）（穿透是双不存在，击穿是库有缓无）
+     * 布隆过滤器解决大范围不存在ID的攻击
+     * 空值缓存法解决单个ID重复攻击
+     *
+     * @param keyPrefix    缓存key前缀
+     * @param id           查询id，与缓存key前缀拼接
+     * @param type         查询数据的Class类型
+     * @param dbFallback   根据id查询数据的函数式接口
+     * @param bloomFilter  布隆过滤器
+     * @param time         有效期
+     * @param unit         时间单位
+     * @param <T>
+     * @param <ID>
+     * @return
+     */
+    public <T,ID> T handCachePenetrationByBloomFilter(String keyPrefix, ID id, Class<T> type, Function<ID,T> dbFallback, RBloomFilter<ID> bloomFilter, Long time, TimeUnit unit){
+        // 1.首先通过布隆过滤器判断id是否可能存在
+        if (!bloomFilter.contains(id)) {
+            // 布隆过滤器确定数据不存在，直接返回null，避免查询Redis和数据库
+            // 注意：布隆过滤器可能存在误判，但它不会漏判，即它判断不存在的一定不存在
+            log.debug("通过布隆过滤器拦截不存在的数据：{}", id);
+            return null;
+        }
+        // 2.布隆过滤器判断数据可能存在，从Redis查询缓存
+        String key = keyPrefix + id;
+        String json = stringRedisTemplate.opsForValue().get(key);
+        // 3.判断缓存是否存在
+        if (StrUtil.isNotBlank(json)){
+            // 3.1 存在，直接返回数据
+            T t = JSONUtil.toBean(json, type);
+            return t;
+        }
+        // 3.2 判断是否命中空值（防止缓存穿透的兜底策略）
+        if (json != null) {
+            // 命中空值，表示之前已查询过数据库并确认数据不存在
+            // 此时json是空字符串或只包含空白字符
+            return null;
+        }
+        // 4.缓存未命中，查询数据库
+        T t = dbFallback.apply(id);
+        // 5.数据库中数据不存在
+        if(t == null){
+            // 5.1 将空值写入Redis，设置较短的过期时间，防止缓存穿透
+            stringRedisTemplate.opsForValue().set(key, "", CACHE_NULL_TTL, TimeUnit.MINUTES);
+
+            // 5.2 这里可以考虑从布隆过滤器中移除该ID，但布隆过滤器通常不支持删除操作
+            // 因为布隆过滤器是基于位图实现的，删除一个元素可能会影响其他元素的判断
+            // 所以我们接受布隆过滤器的误判，通过缓存空值来弥补
+            return null;
+        }
+        // 6.数据库中数据存在，将数据写入Redis
+        this.set(key, t, time, unit);
+        // 7.返回数据
+        return t;
+    }
+
+    //    方法4：根据指定的key查询缓存，并反序列化为指定类型，需要利用逻辑过期解决缓存击穿问题（穿透是双不存在，击穿是库有缓无）
 
     /**
      * 尝试获取锁，判断是否获取锁成功

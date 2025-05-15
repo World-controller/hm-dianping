@@ -13,7 +13,7 @@ import javax.annotation.Resource;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.hmdp.utils.RedisConstants.CACHE_SHOP_TYPE_KEY;
+import static com.hmdp.utils.RedisConstants.SHOP_TYPE_KEY;
 
 /**
  * <p>
@@ -32,9 +32,10 @@ public class ShopTypeServiceImpl extends ServiceImpl<ShopTypeMapper, ShopType> i
     @Override
     public Result queryAll() {
 //        1.从redis缓存中取数据
-        List<String> shopTypeListJson = stringRedisTemplate.opsForList().range(CACHE_SHOP_TYPE_KEY,0L,9L);
+        List<String> shopTypeListJson = stringRedisTemplate.opsForList().range(SHOP_TYPE_KEY,0L,9L);
 //        2.若存在，则直接返回
         if (shopTypeListJson != null && !shopTypeListJson.isEmpty()) {
+            //反序列化
             List<ShopType> shopTypeList = shopTypeListJson.stream().map(s -> JSONUtil.toBean(s, ShopType.class)).collect(Collectors.toList());
             return Result.ok(shopTypeList);
         }
@@ -44,9 +45,9 @@ public class ShopTypeServiceImpl extends ServiceImpl<ShopTypeMapper, ShopType> i
         if (typeList.isEmpty()){
             return Result.fail("404! 您访问的资源不存在！");
         }
-//        5.将查询结果写入redis缓存
+//        5.将查询结果写入redis缓存(序列化)
         List<String> shopCollect = typeList.stream().map(JSONUtil::toJsonStr).collect(Collectors.toList());
-        stringRedisTemplate.opsForList().rightPushAll(CACHE_SHOP_TYPE_KEY,shopCollect);
+        stringRedisTemplate.opsForList().rightPushAll(SHOP_TYPE_KEY,shopCollect);
 //        6.将店铺类型数据进行返回
         return Result.ok(typeList);
     }

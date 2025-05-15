@@ -5,7 +5,7 @@ spring:
     name: hmdp
   datasource:
     driver-class-name: com.mysql.jdbc.Driver
-    url: jdbc:mysql://127.0.0.1:3306/hmdp?useSSL=false&serverTimezone=UTC
+    url: jdbc:mysql://127.0.0.1:3306/hmdp?useSSL=false&serverTimezone=UTC&rewriteBatchedStatements=true #允许批处理
     username: root
     password: 1234
   redis:
@@ -13,15 +13,23 @@ spring:
     port: 6379
     password: 1234
     lettuce:
-      pool:
-        max-active: 10
-        max-idle: 10
-        min-idle: 1
-        time-between-eviction-runs: 10s
+      pool: # lettuce的pool必须手动配置才会生效
+        max-active: 10 # 最大连接
+        max-idle: 10 # 最大空闲连接
+        min-idle: 1 # 最小空闲连接
+        time-between-eviction-runs: 10s # 连接等待时间
   jackson:
     default-property-inclusion: non_null # JSON处理时忽略非空字段
 mybatis-plus:
   type-aliases-package: com.hmdp.entity # 别名扫描包
+#  mapper-locations: "classpath*:/mapper/**/*.xml"Mapper.xml文件地址，默认值
+#  configuration:
+#    map-underscore-to-camel-case: true #是否开启下划线和驼峰的映射
+#    cache-enabled: false  #是否开启二级缓存
+#  global-config:
+#    db-config:
+#      id-type: assign_id #id 为雪花算法生成
+#      update-strategy: not_null #更新策略，只更新非空字段
 logging:
   level:
     com.hmdp: debug

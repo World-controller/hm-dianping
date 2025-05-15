@@ -1,7 +1,5 @@
 package com.hmdp.service.impl;
-import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -11,7 +9,6 @@ import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.hmdp.utils.CacheClient;
 import com.hmdp.utils.RedisData;
-import com.hmdp.utils.SystemConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.geo.Distance;
 import org.springframework.data.geo.GeoResult;
@@ -24,8 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import static com.hmdp.utils.RedisConstants.*;
 import static com.hmdp.utils.SystemConstants.DEFAULT_PAGE_SIZE;
@@ -52,7 +47,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     //todo  比如在HmDianPingApplicationTests中对“103餐厅”进行数据预热（已经实现），但是后面四个餐厅作为非热点key则进行普通的缓存穿透代码实现（未实现）
     //此queryById方法仅仅针对热点Key进行逻辑过期操作
     @Override
-    public Result queryById(Long id) {
+    public Result queryShopById(Long id) {
         //缓存穿透代码实现
 //        Shop shop = queryWithPassThrough(id);
 //        Shop shop = cacheClient.queryWithPassThrough(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
@@ -62,53 +57,13 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
 //        逻辑过期解决缓存击穿
 //        Shop shop = queryWithLogicalExpire(id);
-        Shop shop = cacheClient.handCacheBreakdownByLogicalExpire(CACHE_SHOP_KEY, id, Shop.class, LOCK_SHOP_KEY,this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        Shop shop = cacheClient.handCacheBreakdownByLogicalExpire(SHOP_KEY, id, Shop.class, LOCK_SHOP_KEY,this::getById, SHOP_TTL, TimeUnit.MINUTES);
         if (shop == null) {
             return Result.fail("店铺不存在！");
         }
 
         return Result.ok(shop);
     }
-
-    /*
-    * 缓存穿透代码实现
-    * */
-
-    /*
-    public  Shop queryWithPassThrough(Long id){
-        //        1.从Redis查询商铺缓存
-        String key = CACHE_SHOP_KEY + id;
-        String shopCache = stringRedisTemplate.opsForValue().get(key);
-//        2.判断是否存在
-        if (StrUtil.isNotBlank(shopCache)){
-            //        3.存在，直接返回商铺信息
-            Shop shop = JSONUtil.toBean(shopCache, Shop.class);
-            return shop;
-        }
-
-//        解决缓存穿透第二步：判断redis缓存中是否命中了空值
-        if (shopCache != null) {
-            //此时，我们已经知道 shopCache 要么是 null，要么是空字符串或只包含空白字符
-            //如果 shopCache != null，那么它一定是空字符串或只包含空白字符，表示之前已经查询过数据库并确认该商铺不存在
-//            log.info("此时已经写入redis");
-            return null;
-        }
-
-//        4.不存在则根据id查询数据库
-        Shop shop = getById(id);
-//        5.数据库中商铺不存在返回404  ->解决缓存穿透第一步：将空值写入redis并设置较短的有效期
-        if(shop == null){
-            stringRedisTemplate.opsForValue().set(key, "",CACHE_NULL_TTL,TimeUnit.MINUTES);
-//            log.info("此时还未写入redis");
-            return null;
-        }
-//        6.如果商铺存在将商铺数据写入Redis   (超时剔除策略)
-        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop),CACHE_SHOP_TTL,TimeUnit.MINUTES);
-//        7.返回商铺信息
-        return shop;
-    }
-    **/
-
 
     /*
     * 互斥锁解决缓存击穿
@@ -192,7 +147,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         redisData.setData(shop);
         redisData.setExpireTime(LocalDateTime.now().plusSeconds(expireSeconds));
 //        3.写入redis
-        stringRedisTemplate.opsForValue().set(CACHE_SHOP_KEY + id,JSONUtil.toJsonStr(redisData));
+        stringRedisTemplate.opsForValue().set(SHOP_KEY + id,JSONUtil.toJsonStr(redisData));
     }
 
 
@@ -257,12 +212,12 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             return Result.fail("店铺id不能为空！");
         }
         /*
-          主动更新策略实现
+          主动更新策略第一种方案:：双写方案
          */
 //        1.先    操作数据库
         updateById(shop);
 //        2.再    进行缓存删除的操作
-        stringRedisTemplate.delete(CACHE_SHOP_KEY + id);
+        stringRedisTemplate.delete(SHOP_KEY + id);
         return Result.ok();
     }
 

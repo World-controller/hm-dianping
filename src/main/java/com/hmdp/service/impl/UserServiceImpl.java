@@ -46,13 +46,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
 
     @Override
-    public Result sedCode(String phone, HttpSession session) {
+    public Result sedCode(String phone) {
         //1. 校验手机号
         if (RegexUtils.isPhoneInvalid(phone)) {
             //2.如果不符合，返回错误信息
             return Result.fail("手机号格式错误");
         }
-
         //3. 符合，生成验证码
         String code = RandomUtil.randomNumbers(6);
         //4. 保存验证码到Redis(Session->Redis)
@@ -124,9 +123,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     }
 
     @Override
-    public Result login(LoginFormDTO loginForm, HttpSession session) {
+    public Result login(LoginFormDTO loginForm) {
         //1. 重新校验手机号
-        // TODO:还需要实现sedcode时的手机号和当前login时所需要的手机号保持一致，不然会出现同一时刻内不同手机号可以用同一验证码进行login
         String phone = loginForm.getPhone();
         if (RegexUtils.isPhoneInvalid(phone)) {
             return Result.fail("手机号格式错误");
@@ -134,8 +132,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         //2. 校验验证码(从Session获取->从Redis中获取）
 //        Object cacheCode = session.getAttribute("code");
         String cacheCode = stringRedisTemplate.opsForValue().get(LOGIN_CODE_KEY + phone);
-        String code = loginForm.getCode();
-        if (cacheCode == null || !cacheCode.equals(code)){
+        String inputCode = loginForm.getCode();
+        if (cacheCode == null || !cacheCode.equals(inputCode)){
             //3. 不一致，报错
             return Result.fail("验证码错误");
         }
@@ -155,7 +153,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         //        7.3存储
         //        session.setAttribute("user",BeanUtil.copyProperties(user,UserDTO.class));
         String tokenKey = LOGIN_USER_KEY+token;
-
+        //这两行代码目的：将id类型从Object->String类型以填入Redis
         Long id = (Long) userMap.get("id");
         userMap.put("id",id.toString());
 

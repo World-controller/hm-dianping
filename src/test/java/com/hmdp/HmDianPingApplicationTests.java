@@ -21,8 +21,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static com.hmdp.utils.RedisConstants.CACHE_SHOP_KEY;
-import static com.hmdp.utils.RedisConstants.SHOP_GEO_KEY;
+import static com.hmdp.utils.RedisConstants.*;
 
 @SpringBootTest
 class HmDianPingApplicationTests {
@@ -66,12 +65,12 @@ class HmDianPingApplicationTests {
         }
 
         @Test
-        public void testSaveShop() throws InterruptedException {
+        public void testSaveShop() {
             //针对热点数据进行数据预热后，然后使用逻辑过期技术以解决缓存击穿问题
-            Shop[] shops = new Shop[5];
-            for (Long i = 1L; i <= 5L;i ++){
+            Shop[] shops = new Shop[14];
+            for (Long i = 1L; i <= 14L;i ++){
                 shops[(int) (i-1)] = shopService.getById(i);
-                cacheClient.setWithLogicalExpire(CACHE_SHOP_KEY+ i,shops[(int) (i-1)],10L, TimeUnit.SECONDS);
+                cacheClient.setWithLogicalExpire(SHOP_KEY+ i,shops[(int) (i-1)],10L, TimeUnit.SECONDS);
             }
         }
 

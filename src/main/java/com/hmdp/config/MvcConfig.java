@@ -18,6 +18,9 @@ public class MvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         //order越小越先执行
+        //刷新拦截器(拦截一切路径，保证用户在所有资源下都会进行30m的刷新操作)
+        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate))
+                .addPathPatterns("/**").order(0);
         // 登录拦截器
         registry.addInterceptor(new LoginInterceptor())
                 .excludePathPatterns(
@@ -29,8 +32,5 @@ public class MvcConfig implements WebMvcConfigurer {
                         "/user/code",
                         "/user/login"
                 ).order(1);
-        //刷新拦截器(拦截一切路径，保证用户在所有资源下都会进行30m的刷新操作)
-        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate))
-                .addPathPatterns("/**").order(0);
     }
 }

@@ -13,7 +13,10 @@ import java.util.concurrent.TimeUnit;
 
 import static com.hmdp.utils.RedisConstants.LOGIN_USER_KEY;
 import static com.hmdp.utils.RedisConstants.LOGIN_USER_TTL;
-
+/*
+* 解决问题1：把用户登录验证功能的逻辑抽取到一个地方，就是SpringMVC的拦截器
+* 解决问题2：拦截器帮我们完成了对用户的校验，拿到了用户信息，那对应的Controller如何拿到用户信息呢？  方案：将用户信息保存到ThreadLocal中。
+* */
 public class RefreshTokenInterceptor implements HandlerInterceptor {
 
     private final StringRedisTemplate stringRedisTemplate;
@@ -22,6 +25,11 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
+
+    /**
+     * 前置拦截，在Controller执行之前
+     * 做登录验证校验
+     */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         // 1.获取请求头中的token
@@ -36,7 +44,7 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         if (userMap.isEmpty()) {//用户为空放行，因为这个过滤器的任务只是为了刷新时间语句执行
             return true;
         }
-        // 5.将查询到的hash数据转为UserDTO
+        // 5.将查询到的hash数据转为UserDTO（Redis反序列化）
         UserDTO userDTO = BeanUtil.fillBeanWithMap(userMap, new UserDTO(), false);
         // 6.存在，保存用户信息到 ThreadLocal
         UserHolder.saveUser(userDTO);
@@ -46,9 +54,22 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         return true;
     }
 
+
+    /**
+     * 后置拦截，在Controller执行之后
+     */
+//    @Override
+//    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
+//        HandlerInterceptor.super.postHandle(request, response, handler, modelAndView);
+//    }
+
+    /**
+     * 在视图渲染之后，返回给用户之前
+     * 业务执行完后，销毁用户信息，避免内存泄露
+     */
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
-        // 移除用户
+        // 移除用户，销毁当前线程，防止内存泄露
         UserHolder.removeUser();
     }
 }
